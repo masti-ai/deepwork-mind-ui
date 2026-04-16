@@ -1,92 +1,104 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query } from "@/lib/db";
 
-interface MemoryRow {
+interface CuratedMemoryRow {
   id: string;
-  title: string;
-  metadata: string;
+  content: string;
+  category: string;
+  topics: string;
+  importance: number;
+  access_count: number;
+  last_accessed_at: string | null;
+  decay_lambda: number;
+  source_town: string;
   created_at: string;
+  archived: number;
+}
+
+interface HealthRow {
+  total: number;
+  total_reads: number;
+  never_recalled: number;
 }
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const search = params.get("q") || "";
-  const kind = params.get("kind") || "";
+  const category = params.get("kind") || "";
   const scope = params.get("scope") || "";
-  const minConfidence = parseFloat(params.get("min_confidence") || "0");
+  const minImportance = parseFloat(params.get("min_confidence") || "0");
 
-  const conditions = ["issue_type = 'memory'", "status = 'open'"];
-  const values: string[] = [];
+  const conditions: string[] = ["archived = 0"];
+  const values: (string | number)[] = [];
 
   if (search) {
-    conditions.push("title LIKE ?");
+    conditions.push("content LIKE ?");
     values.push(`%${search}%`);
   }
-  if (scope) {
-    conditions.push("JSON_EXTRACT(metadata, '$.\"memory.scope\"') = ?");
-    values.push(scope);
+  if (category) {
+    conditions.push("category = ?");
+    values.push(category);
   }
-  if (kind) {
-    conditions.push("JSON_EXTRACT(metadata, '$.\"memory.kind\"') = ?");
-    values.push(kind);
+  if (scope === "town" || scope === "global") {
+    // For skills tab: high-importance org memories
+    conditions.push("importance >= 0.5");
+  }
+  if (minImportance > 0) {
+    conditions.push("importance >= ?");
+    values.push(minImportance);
   }
 
-  const sql = `SELECT id, title, metadata, created_at FROM issues WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT 100`;
+  const sql = `SELECT id, content, category, topics, importance, access_count, last_accessed_at, decay_lambda, source_town, created_at, archived FROM curated_memories WHERE ${conditions.join(" AND ")} ORDER BY importance DESC, created_at DESC LIMIT 100`;
 
   try {
-    const rows = await query<MemoryRow>(sql, values);
+    const rows = await query<CuratedMemoryRow>(sql, values);
 
-    const memories = rows
-      .map((row) => {
-        const meta = typeof row.metadata === "string" ? JSON.parse(row.metadata) : row.metadata || {};
-        const confidence = parseFloat(meta["memory.confidence"] || "0");
-        if (confidence < minConfidence) return null;
-        return {
-          id: row.id,
-          title: row.title,
-          kind: meta["memory.kind"] || "",
-          scope: meta["memory.scope"] || "",
-          confidence,
-          access_count: parseInt(meta["memory.access_count"] || "0"),
-          last_accessed: meta["memory.last_accessed"] || "",
-          decay_at: meta["memory.decay_at"] || "",
-          source_bead: meta["memory.source_bead"] || "",
-          created_at: row.created_at,
-        };
-      })
-      .filter(Boolean);
+    const memories = rows.map((row) => {
+      let topics: string[] = [];
+      try {
+        topics = typeof row.topics === "string" ? JSON.parse(row.topics) : row.topics || [];
+      } catch { /* empty */ }
 
-    // Health stats
-    const totalRows = await query<{ cnt: number }>(
-      "SELECT COUNT(*) as cnt FROM issues WHERE issue_type = 'memory' AND status = 'open'"
+      return {
+        id: row.id,
+        title: row.content,
+        kind: row.category || "context",
+        scope: row.importance >= 0.8 ? "town" : "rig",
+        confidence: row.importance,
+        access_count: row.access_count,
+        last_accessed: row.last_accessed_at || "",
+        decay_at: "",
+        source_bead: "",
+        source_town: row.source_town,
+        topics,
+        created_at: row.created_at,
+      };
+    });
+
+    // Health stats from indexed aggregates (fast)
+    const healthRows = await query<HealthRow>(
+      `SELECT
+        COUNT(*) as total,
+        COALESCE(SUM(access_count), 0) as total_reads,
+        SUM(CASE WHEN access_count = 0 THEN 1 ELSE 0 END) as never_recalled
+      FROM curated_memories WHERE archived = 0`
     );
-    const total = totalRows[0]?.cnt || 0;
-
-    const neverRecalledRows = await query<{ cnt: number }>(
-      "SELECT COUNT(*) as cnt FROM issues WHERE issue_type = 'memory' AND status = 'open' AND (JSON_EXTRACT(metadata, '$.\"memory.access_count\"') = '0' OR JSON_EXTRACT(metadata, '$.\"memory.access_count\"') IS NULL)"
-    );
-    const neverRecalled = neverRecalledRows[0]?.cnt || 0;
-
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const readsRows = await query<{ total_reads: string }>(
-      "SELECT COALESCE(SUM(CAST(JSON_EXTRACT(metadata, '$.\"memory.access_count\"') AS UNSIGNED)), 0) as total_reads FROM issues WHERE issue_type = 'memory' AND status = 'open'"
-    );
-    const totalReads = parseInt(readsRows[0]?.total_reads || "0");
+    const h = healthRows[0] || { total: 0, total_reads: 0, never_recalled: 0 };
 
     return NextResponse.json({
       memories,
       health: {
-        total,
-        reads_today: totalReads,
-        ratio: total > 0 ? Math.round((totalReads / total) * 10) / 10 : 0,
-        never_recalled: neverRecalled,
+        total: h.total,
+        reads_today: h.total_reads,
+        ratio: h.total > 0 ? Math.round((h.total_reads / h.total) * 10) / 10 : 0,
+        never_recalled: h.never_recalled,
       },
     });
-  } catch (e) {
-    console.error("Memory query failed:", e);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("Memory query failed:", message);
     return NextResponse.json(
-      { error: "Failed to fetch memories", memories: [], health: { total: 0, reads_today: 0, ratio: 0, never_recalled: 0 } },
+      { error: "Failed to fetch memories", detail: message, memories: [], health: { total: 0, reads_today: 0, ratio: 0, never_recalled: 0 } },
       { status: 500 }
     );
   }
@@ -94,47 +106,32 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { content, kind = "pattern", scope = "rig", confidence = 0.8, decay_days = 0, source_bead = "" } = body;
+  const { content, kind = "pattern", confidence = 0.8, decay_days = 0, source_town = "deepwork" } = body;
 
   if (!content) {
     return NextResponse.json({ error: "Content is required" }, { status: 400 });
   }
 
-  const validKinds = ["pattern", "decision", "incident", "skill", "context", "anti-pattern"];
+  const validKinds = ["pattern", "decision", "incident", "skill", "context", "anti-pattern", "debug-recipe", "environment"];
   if (!validKinds.includes(kind)) {
     return NextResponse.json({ error: `Invalid kind. Must be: ${validKinds.join(", ")}` }, { status: 400 });
   }
 
   const crypto = await import("crypto");
+  const id = `mem-${crypto.randomBytes(4).toString("hex")}`;
   const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-  const hash = crypto.createHash("sha256").update(`${content}${now}`).digest("hex").slice(0, 8);
-  const id = `mem-${hash}`;
-
-  const metadata: Record<string, string> = {
-    "memory.kind": kind,
-    "memory.confidence": String(confidence),
-    "memory.scope": scope,
-    "memory.access_count": "0",
-    "memory.last_accessed": "",
-  };
-
-  if (decay_days > 0) {
-    const decayDate = new Date(Date.now() + decay_days * 86400000);
-    metadata["memory.decay_at"] = decayDate.toISOString();
-  }
-  if (source_bead) {
-    metadata["memory.source_bead"] = source_bead;
-  }
 
   try {
     await query(
-      "INSERT INTO issues (id, title, description, design, acceptance_criteria, notes, status, issue_type, priority, created_at, updated_at, metadata) VALUES (?, ?, '', '', '', '', 'open', 'memory', 2, ?, ?, ?)",
-      [id, content, now, now, JSON.stringify(metadata)]
+      `INSERT INTO curated_memories (id, content, category, topics, importance, importance_at, decay_lambda, access_count, source_town, created_at, archived)
+       VALUES (?, ?, ?, '[]', ?, ?, ?, 0, ?, ?, 0)`,
+      [id, content, kind, confidence, now, decay_days > 0 ? 0.05 : 0, source_town, now]
     );
 
-    return NextResponse.json({ id, title: content, kind, scope, confidence });
-  } catch (e) {
-    console.error("Memory create failed:", e);
+    return NextResponse.json({ id, content, kind, importance: confidence });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("Memory create failed:", message);
     return NextResponse.json({ error: "Failed to create memory" }, { status: 500 });
   }
 }
