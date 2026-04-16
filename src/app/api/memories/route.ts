@@ -62,14 +62,12 @@ export async function GET(request: NextRequest) {
       return {
         id: row.id,
         title: row.content,
-        kind: row.category || "context",
-        scope: row.importance >= 0.8 ? "town" : "rig",
-        confidence: row.importance,
+        tags: row.category ? [row.category] : [],
+        visibility: row.importance >= 0.8 ? "org" as const : "private" as const,
+        importance: row.importance,
         access_count: row.access_count,
         last_accessed: row.last_accessed_at || "",
-        decay_at: "",
-        source_bead: "",
-        source_town: row.source_town,
+        source: row.source_town || "",
         topics,
         created_at: row.created_at,
       };

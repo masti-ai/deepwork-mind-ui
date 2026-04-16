@@ -1,10 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { MemoryKind, MemoryScope } from "@/lib/types";
-
-const kinds: MemoryKind[] = ["pattern", "decision", "incident", "skill", "context", "anti-pattern"];
-const scopes: MemoryScope[] = ["agent", "rig", "town", "global"];
+import type { MemoryVisibility } from "@/lib/types";
 
 interface Props {
   onCreated: () => void;
@@ -13,9 +10,7 @@ interface Props {
 export default function CreateMemory({ onCreated }: Props) {
   const [open, setOpen] = useState(false);
   const [content, setContent] = useState("");
-  const [kind, setKind] = useState<MemoryKind>("pattern");
-  const [scope, setScope] = useState<MemoryScope>("rig");
-  const [confidence, setConfidence] = useState(0.8);
+  const [visibility, setVisibility] = useState<MemoryVisibility>("private");
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -27,7 +22,11 @@ export default function CreateMemory({ onCreated }: Props) {
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: content.trim(), kind, scope, confidence }),
+        body: JSON.stringify({
+          content: content.trim(),
+          visibility,
+          // AI will auto-tag — no manual tag selection needed
+        }),
       });
       if (res.ok) {
         setContent("");
@@ -55,46 +54,37 @@ export default function CreateMemory({ onCreated }: Props) {
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
-        placeholder="What should be remembered..."
-        rows={2}
+        placeholder="What should be remembered? AI will categorize it automatically..."
+        rows={3}
         autoFocus
         className="w-full text-sm text-warm-800 placeholder:text-warm-300 bg-transparent border-none focus:outline-none resize-none leading-relaxed"
       />
 
       <div className="flex items-center gap-3 mt-3 pt-3 border-t border-warm-100">
-        <select
-          value={kind}
-          onChange={(e) => setKind(e.target.value as MemoryKind)}
-          className="text-xs bg-warm-50 border border-warm-200 rounded px-2 py-1.5 text-warm-600 focus:outline-none"
-        >
-          {kinds.map((k) => (
-            <option key={k} value={k}>{k}</option>
-          ))}
-        </select>
-
-        <select
-          value={scope}
-          onChange={(e) => setScope(e.target.value as MemoryScope)}
-          className="text-xs bg-warm-50 border border-warm-200 rounded px-2 py-1.5 text-warm-600 focus:outline-none"
-        >
-          {scopes.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-
-        <label className="flex items-center gap-1.5 text-xs text-warm-400">
-          <span>conf</span>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            value={confidence}
-            onChange={(e) => setConfidence(parseFloat(e.target.value))}
-            className="w-16 accent-accent"
-          />
-          <span className="text-warm-600 w-6 text-right">{confidence}</span>
-        </label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setVisibility("private")}
+            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+              visibility === "private"
+                ? "bg-warm-200 text-warm-700"
+                : "bg-warm-50 text-warm-400 hover:bg-warm-100"
+            }`}
+          >
+            Private
+          </button>
+          <button
+            type="button"
+            onClick={() => setVisibility("org")}
+            className={`text-xs px-3 py-1.5 rounded-full transition-colors ${
+              visibility === "org"
+                ? "bg-accent/10 text-accent"
+                : "bg-warm-50 text-warm-400 hover:bg-warm-100"
+            }`}
+          >
+            Share with org
+          </button>
+        </div>
 
         <div className="flex-1" />
 
@@ -108,7 +98,7 @@ export default function CreateMemory({ onCreated }: Props) {
         <button
           type="submit"
           disabled={!content.trim() || saving}
-          className="text-xs bg-accent text-white rounded px-3 py-1.5 hover:bg-accent/90 disabled:opacity-40 transition-colors"
+          className="text-xs bg-accent text-white rounded-lg px-4 py-1.5 hover:bg-accent/90 disabled:opacity-40 transition-colors"
         >
           {saving ? "Saving..." : "Remember"}
         </button>

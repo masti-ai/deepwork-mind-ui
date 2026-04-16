@@ -1,16 +1,17 @@
-export type MemoryKind = "pattern" | "decision" | "incident" | "skill" | "context" | "anti-pattern";
-export type MemoryScope = "agent" | "rig" | "town" | "global";
+// Product-facing types — no Gas Town terminology
+
+export type MemoryVisibility = "private" | "org";
 
 export interface Memory {
   id: string;
   title: string;
-  kind: MemoryKind;
-  scope: MemoryScope;
-  confidence: number;
+  tags: string[];
+  visibility: MemoryVisibility;
+  importance: number;
   access_count: number;
   last_accessed: string;
-  decay_at: string;
-  source_bead: string;
+  source: string;
+  topics: string[];
   created_at: string;
 }
 
@@ -23,7 +24,26 @@ export interface MemoryHealth {
 
 export interface MemoryFilters {
   query: string;
-  kind: MemoryKind | "";
-  scope: MemoryScope | "";
-  min_confidence: number;
+  tag: string;
+  visibility: MemoryVisibility | "";
+}
+
+export interface Skill {
+  name: string;
+  description: string;
+  path: string;
+  tags: string[];
+  source: "local" | "org" | "community";
+  last_used: string;
+}
+
+export interface Workflow {
+  id: string;
+  name: string;
+  type: "cron" | "pipeline" | "agent";
+  schedule: string;
+  last_run: string;
+  last_result: "success" | "failed" | "running" | "never";
+  run_count: number;
+  steps: string[];
 }
