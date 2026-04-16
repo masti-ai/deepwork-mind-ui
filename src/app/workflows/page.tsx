@@ -27,7 +27,7 @@ const statusColors = {
 };
 
 export default function WorkflowsPage() {
-  const [health, setHealth] = useState<{ dolt: string; vllm: string; gitea: string } | null>(null);
+  const [health, setHealth] = useState<{ dolt: "ok" | "error" | "unknown"; vllm: "ok" | "error" | "unknown"; gitea: "ok" | "error" | "unknown" } | null>(null);
 
   useEffect(() => {
     async function check() {
