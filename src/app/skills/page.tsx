@@ -2,70 +2,56 @@
 
 import { useEffect, useState } from "react";
 
-interface Tool {
+interface Skill {
   name: string;
   description: string;
-  call_count: number;
-  avg_latency_ms: number;
-  last_used: string;
-  domain: string;
+  version: string;
+  path: string;
+  source: "local" | "org" | "community";
+  category: string;
+  hasReferences: boolean;
+  size: number;
 }
 
-function categorizeTool(name: string): string {
-  if (name.includes("memory")) return "Memory";
-  if (name.includes("wasteland") || name.includes("crown")) return "Auditing";
-  if (name.includes("docs") || name.includes("github")) return "Publishing";
-  if (name.includes("analytics") || name.includes("health")) return "Analytics";
-  if (name.includes("feedback")) return "Feedback";
-  return "General";
-}
+const sourceColors = {
+  local: "bg-warm-100 text-warm-600",
+  org: "bg-accent/10 text-accent",
+  community: "bg-blue-50 text-blue-600",
+};
 
 export default function SkillsPage() {
-  const [tools, setTools] = useState<Tool[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/skills");
-        const data = await res.json();
-        setTools(data.tools || []);
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    fetch("/api/skills").then((r) => r.json()).then((d) => {
+      setSkills(d.skills || []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
 
   if (loading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3, 4].map((i) => (
+        {[1, 2, 3].map((i) => (
           <div key={i} className="bg-warm-100/50 rounded-lg h-16 animate-pulse" />
         ))}
       </div>
     );
   }
 
-  const domains = [...new Set(tools.map((t) => t.domain))].sort();
-  const grouped: Record<string, Tool[]> = {};
-  for (const t of tools) {
-    (grouped[t.domain] ??= []).push(t);
+  const categories = [...new Set(skills.map((s) => s.category))];
+  const grouped: Record<string, Skill[]> = {};
+  for (const s of skills) {
+    (grouped[s.category] ??= []).push(s);
   }
-
-  const totalCalls = tools.reduce((sum, t) => sum + t.call_count, 0);
 
   return (
     <div className="space-y-10">
       <div className="flex items-baseline justify-between">
         <p className="text-xs text-warm-400">
-          <strong className="text-warm-600 font-medium">{tools.length}</strong> tools available
-          {totalCalls > 0 && (
-            <> &middot; <strong className="text-warm-600 font-medium">{totalCalls}</strong> total invocations</>
-          )}
+          <strong className="text-warm-600 font-medium">{skills.length}</strong> skills installed
         </p>
         <a
           href="https://versus.sh"
@@ -77,37 +63,44 @@ export default function SkillsPage() {
         </a>
       </div>
 
-      {domains.map((domain) => (
-        <section key={domain}>
+      {categories.map((cat) => (
+        <section key={cat}>
           <h3 className="text-lg text-warm-800 mb-4" style={{ fontFamily: "'Bitter', Georgia, serif" }}>
-            {domain}
+            {cat}
           </h3>
           <div className="space-y-1">
-            {grouped[domain].map((tool) => (
+            {grouped[cat].map((skill) => (
               <div
-                key={tool.name}
-                onClick={() => setExpanded(expanded === tool.name ? null : tool.name)}
+                key={skill.path || skill.name}
+                onClick={() => setExpanded(expanded === skill.name ? null : skill.name)}
                 className="bg-white rounded-lg px-4 py-3 border border-warm-100 hover:border-warm-200 cursor-pointer transition-all animate-fade-in"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <code className="text-sm text-warm-800 font-mono">{tool.name}</code>
-                    {tool.call_count > 0 && (
-                      <span className="text-[10px] text-warm-400 bg-warm-50 px-1.5 py-0.5 rounded">
-                        {tool.call_count} calls
-                      </span>
+                    <span className="text-sm text-warm-800 font-medium">{skill.name}</span>
+                    {skill.version && (
+                      <span className="text-[10px] text-warm-300">v{skill.version}</span>
+                    )}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${sourceColors[skill.source]}`}>
+                      {skill.source}
+                    </span>
+                    {skill.hasReferences && (
+                      <span className="text-[10px] text-warm-300">+ references</span>
                     )}
                   </div>
-                  {tool.avg_latency_ms > 0 && (
-                    <span className="text-[10px] text-warm-300">{Math.round(tool.avg_latency_ms)}ms avg</span>
-                  )}
                 </div>
-                {expanded === tool.name && (
-                  <div className="mt-3 pt-3 border-t border-warm-100 animate-fade-in">
-                    <p className="text-xs text-warm-500 leading-relaxed">{tool.description || "No description available."}</p>
-                    {tool.last_used && (
-                      <p className="text-[10px] text-warm-300 mt-2">Last used: {tool.last_used}</p>
-                    )}
+                {skill.description && (
+                  <p className="text-xs text-warm-500 mt-1 leading-relaxed line-clamp-2">
+                    {skill.description}
+                  </p>
+                )}
+                {expanded === skill.name && (
+                  <div className="mt-3 pt-3 border-t border-warm-100 animate-fade-in text-xs text-warm-500">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>Source: <span className="text-warm-700">{skill.source}</span></div>
+                      <div>Size: <span className="text-warm-700">{(skill.size / 1024).toFixed(1)}KB</span></div>
+                    </div>
+                    <p className="text-[10px] text-warm-300 mt-2 font-mono break-all">{skill.path}</p>
                   </div>
                 )}
               </div>
@@ -116,10 +109,12 @@ export default function SkillsPage() {
         </section>
       ))}
 
-      {tools.length === 0 && (
+      {skills.length === 0 && (
         <div className="py-16 text-center">
-          <p className="text-sm text-warm-400">No tools registered yet.</p>
-          <p className="text-xs text-warm-300 mt-1">Connect Deepwork Mind MCP to your coding agent to see available tools.</p>
+          <p className="text-sm text-warm-400">No skills installed.</p>
+          <p className="text-xs text-warm-300 mt-1">
+            Skills are instruction files that teach your agents how to work. Browse <a href="https://versus.sh" className="text-accent">versus.sh</a> to find skills.
+          </p>
         </div>
       )}
     </div>

@@ -1,70 +1,106 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { readdir, readFile, stat } from "fs/promises";
+import { join } from "path";
 
-interface ToolRow {
-  tool_name: string;
+interface SkillInfo {
+  name: string;
   description: string;
+  version: string;
+  path: string;
+  source: "local" | "org" | "community";
+  hasReferences: boolean;
+  size: number;
 }
 
-interface UsageRow {
-  tool_name: string;
-  call_count: number;
-  avg_latency_ms: number;
-  last_called: string;
+async function scanSkillsDir(dir: string, source: "local" | "org" | "community"): Promise<SkillInfo[]> {
+  const skills: SkillInfo[] = [];
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const skillDir = join(dir, entry.name);
+      const skillMd = join(skillDir, "SKILL.md");
+      try {
+        const content = await readFile(skillMd, "utf-8");
+        // Parse frontmatter
+        const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        const fm: Record<string, string> = {};
+        if (fmMatch) {
+          for (const line of fmMatch[1].split("\n")) {
+            const [key, ...vals] = line.split(":");
+            if (key && vals.length) fm[key.trim()] = vals.join(":").trim();
+          }
+        }
+        const refDir = join(skillDir, "reference");
+        let hasRefs = false;
+        try { hasRefs = (await stat(refDir)).isDirectory(); } catch { /* no refs */ }
+        const fstat = await stat(skillMd);
+        skills.push({
+          name: fm.name || entry.name,
+          description: fm.description || "",
+          version: fm.version || "",
+          path: skillDir,
+          source,
+          hasReferences: hasRefs,
+          size: fstat.size,
+        });
+      } catch {
+        // No SKILL.md — skip
+      }
+    }
+  } catch {
+    // Directory doesn't exist
+  }
+  return skills;
 }
 
-function categorizeTool(name: string): string {
-  if (name.includes("memory")) return "Memory";
-  if (name.includes("wasteland") || name.includes("crown")) return "Auditing";
-  if (name.includes("docs")) return "Documentation";
-  if (name.includes("github")) return "GitHub";
-  if (name.includes("analytics") || name.includes("health")) return "Analytics";
-  if (name.includes("feedback")) return "Feedback";
-  return "General";
+async function scanCommands(dir: string): Promise<SkillInfo[]> {
+  const skills: SkillInfo[] = [];
+  try {
+    const entries = await readdir(dir);
+    for (const file of entries) {
+      if (!file.endsWith(".md")) continue;
+      const filePath = join(dir, file);
+      const content = await readFile(filePath, "utf-8");
+      const firstLine = content.split("\n").find((l) => l.trim().length > 0) || "";
+      const fstat = await stat(filePath);
+      skills.push({
+        name: `/${file.replace(".md", "")}`,
+        description: firstLine.replace(/^#\s*/, "").slice(0, 120),
+        version: "",
+        path: filePath,
+        source: "local",
+        hasReferences: false,
+        size: fstat.size,
+      });
+    }
+  } catch {
+    // no commands dir
+  }
+  return skills;
 }
 
 export async function GET() {
+  const gtRoot = process.env.GT_ROOT || "/home/pratham2/gt";
+
   try {
-    // Get tool catalog
-    let catalog: ToolRow[] = [];
-    try {
-      catalog = await query<ToolRow>("SELECT tool_name, description FROM di.tool_catalog ORDER BY tool_name");
-    } catch {
-      // tool_catalog may not exist
-    }
+    const [agentSkills, packSkills, commands, claudeCommands] = await Promise.all([
+      scanSkillsDir(join(gtRoot, ".agents/skills"), "local"),
+      scanSkillsDir(join(gtRoot, "deepwork-org-config-pack/skills"), "org"),
+      scanCommands(join(gtRoot, ".claude/commands")),
+      scanCommands(join(gtRoot, "deepwork_intelligence/.claude/commands")),
+    ]);
 
-    // Get usage stats
-    let usage: UsageRow[] = [];
-    try {
-      usage = await query<UsageRow>(
-        `SELECT tool_name, COUNT(*) as call_count, AVG(latency_ms) as avg_latency_ms, MAX(called_at) as last_called
-         FROM di.tool_invocations GROUP BY tool_name ORDER BY call_count DESC`
-      );
-    } catch {
-      // tool_invocations may not exist
-    }
+    const allSkills = [
+      ...agentSkills.map((s) => ({ ...s, category: "Agent Skills" })),
+      ...packSkills.map((s) => ({ ...s, category: "Organization Skills" })),
+      ...commands.map((s) => ({ ...s, category: "Commands" })),
+      ...claudeCommands.filter((c) => !commands.find((cc) => cc.name === c.name)).map((s) => ({ ...s, category: "Commands" })),
+    ];
 
-    const usageMap = new Map(usage.map((u) => [u.tool_name, u]));
-
-    // Merge catalog + usage
-    const toolNames = new Set([...catalog.map((t) => t.tool_name), ...usage.map((u) => u.tool_name)]);
-
-    const tools = [...toolNames].map((name) => {
-      const cat = catalog.find((c) => c.tool_name === name);
-      const use = usageMap.get(name);
-      return {
-        name,
-        description: cat?.description || "",
-        call_count: use?.call_count || 0,
-        avg_latency_ms: use?.avg_latency_ms || 0,
-        last_used: use?.last_called || "",
-        domain: categorizeTool(name),
-      };
-    }).sort((a, b) => b.call_count - a.call_count);
-
-    return NextResponse.json({ tools, total: tools.length });
+    return NextResponse.json({ skills: allSkills, total: allSkills.length });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json({ error: msg, tools: [] }, { status: 500 });
+    return NextResponse.json({ error: msg, skills: [] }, { status: 500 });
   }
 }
