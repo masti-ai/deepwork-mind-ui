@@ -19,9 +19,12 @@ export default function MemoryCard({ memory }: { memory: Memory }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <button
+    <div
       onClick={() => setExpanded(!expanded)}
-      className="w-full text-left bg-white rounded-lg px-5 py-4 transition-all hover:shadow-sm animate-fade-in border border-warm-100 hover:border-warm-200"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && setExpanded(!expanded)}
+      className="w-full text-left bg-white rounded-lg px-5 py-4 transition-all hover:shadow-sm animate-fade-in border border-warm-100 hover:border-warm-200 cursor-pointer"
     >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
@@ -81,14 +84,23 @@ export default function MemoryCard({ memory }: { memory: Memory }) {
                 )}
               </dl>
 
-              <div className="flex gap-2 mt-4">
-                <button className="text-[11px] px-2.5 py-1 rounded bg-warm-50 text-warm-500 hover:bg-warm-100 transition-colors">
+              <div className="flex gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
+                <button
+                  onClick={() => alert(`Memory "${memory.id}" will be injected into your next agent session.`)}
+                  className="text-[11px] px-2.5 py-1 rounded bg-warm-50 text-warm-500 hover:bg-accent/10 hover:text-accent transition-colors"
+                >
                   Teach agent
                 </button>
-                <button className="text-[11px] px-2.5 py-1 rounded bg-warm-50 text-warm-500 hover:bg-warm-100 transition-colors">
+                <button
+                  onClick={() => alert(`Memory added to org knowledge base.`)}
+                  className="text-[11px] px-2.5 py-1 rounded bg-warm-50 text-warm-500 hover:bg-accent/10 hover:text-accent transition-colors"
+                >
                   Add to knowledge base
                 </button>
-                <button className="text-[11px] px-2.5 py-1 rounded bg-warm-50 text-warm-500 hover:bg-warm-100 transition-colors">
+                <button
+                  onClick={() => alert(`Generating workflow from this memory...`)}
+                  className="text-[11px] px-2.5 py-1 rounded bg-warm-50 text-warm-500 hover:bg-accent/10 hover:text-accent transition-colors"
+                >
                   Generate workflow
                 </button>
               </div>
@@ -100,6 +112,6 @@ export default function MemoryCard({ memory }: { memory: Memory }) {
           <span className="text-xs text-warm-300">{timeAgo(memory.created_at)}</span>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
