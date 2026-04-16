@@ -1,52 +1,36 @@
-# Deepwork Mind UI
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-> Intelligence hub for coding agents. Three tabs: **Memories**, **Skills**, **Workflows**.
+## Getting Started
 
-Deepwork Mind makes your coding agents (Claude Code, OpenCode, Cursor) accumulate knowledge instead of starting from scratch every session. This is the standalone dashboard — install with one command, see your agents get smarter.
-
-## Quick Start
+First, run the development server:
 
 ```bash
-docker compose up
-# Dashboard at http://localhost:3000
-# DI MCP server at stdio (add .mcp.json to your project)
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-## Design
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-Wispr Flow-inspired. Light, warm, editorial. See [.impeccable.md](.impeccable.md) for full design context.
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-**Principles:**
-1. **Three things, beautifully** — Memories, Skills, Workflows. That's it.
-2. **Intelligence, not configuration** — shows value on first open.
-3. **Concise yet informed** — depth on interaction, not first glance.
-4. **Cumulative** — every visit shows more than last time.
-5. **No slop** — every pixel earns its place.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Architecture
+## Learn More
 
-- **Frontend**: Next.js 14+ with App Router, Tailwind CSS, custom components
-- **Backend**: Deepwork Intelligence MCP server (Python)
-- **Data**: Dolt SQL (gt_collab database)
-- **LLM**: Pluggable — any provider (OpenAI, Anthropic, Gemini, Ollama, local vLLM)
+To learn more about Next.js, take a look at the following resources:
 
-## Tabs
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-### Memories
-Browse, search, create memories. See read/write health. Org vs agent scope. Never-recalled highlights.
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-### Skills
-Curated org knowledge auto-generated from accumulated memories. Beautiful markdown rendering. Export as config pack.
+## Deploy on Vercel
 
-### Workflows
-Create, trigger, monitor ADK workflows. Epic-close pipeline, custom sequences. Step-by-step execution logs.
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for design guidelines and development setup.
-
-## License
-
-Apache 2.0
-
-Built with [Deepwork](https://deepwork.art)
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

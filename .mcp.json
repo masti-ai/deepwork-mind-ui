@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "deepwork-intelligence": {
+      "command": "python3",
+      "args": ["/home/pratham2/gt/deepwork_intelligence/server.py"],
+      "env": {
+        "GT_ROOT": "/home/pratham2/gt"
+      }
+    }
+  }
+}
