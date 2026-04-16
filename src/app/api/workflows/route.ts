@@ -125,7 +125,35 @@ export async function GET() {
       }
     } catch { /* no pipeline_events */ }
 
+    // Get MCP tools as sub-agents
+    interface ToolRow { tool_name: string; description: string; }
+    interface ToolUsageRow { tool_name: string; cnt: number; last_called: string; }
+    let mcpTools: AgentInfo[] = [];
+    try {
+      const toolCatalog = await query<ToolRow>("SELECT tool_name, description FROM di.tool_catalog ORDER BY tool_name");
+      let toolUsage: ToolUsageRow[] = [];
+      try {
+        toolUsage = await query<ToolUsageRow>("SELECT tool_name, COUNT(*) as cnt, MAX(called_at) as last_called FROM di.tool_invocations GROUP BY tool_name");
+      } catch { /* ok */ }
+      const usageMap = new Map(toolUsage.map((u) => [u.tool_name, u]));
+
+      mcpTools = toolCatalog.map((t) => {
+        const usage = usageMap.get(t.tool_name);
+        return {
+          name: t.tool_name,
+          type: "agent" as const,
+          description: (t.description || "").slice(0, 120),
+          path: "",
+          steps: [],
+          run_count: usage?.cnt || 0,
+          last_run: usage?.last_called || "",
+          last_result: usage ? "success" as const : "never" as const,
+        };
+      });
+    } catch { /* no tool_catalog */ }
+
     const all = [
+      ...mcpTools.map((t) => ({ ...t, category: "DI MCP Tools" })),
       ...agents.map((a) => ({ ...a, category: "Agents" })),
       ...formulas.slice(0, 20).map((f) => ({ ...f, category: "Formulas" })),
       ...crons.map((c) => ({ ...c, category: "Scheduled Jobs" })),

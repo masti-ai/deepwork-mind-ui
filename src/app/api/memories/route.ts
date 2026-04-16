@@ -53,6 +53,35 @@ export async function GET(request: NextRequest) {
   try {
     const rows = await query<CuratedMemoryRow>(sql, values);
 
+    // Also fetch from gc.issues (old system — MCP memory_remember writes here)
+    interface GcMemoryRow { id: string; title: string; metadata: string; created_at: string; }
+    let gcRows: GcMemoryRow[] = [];
+    try {
+      gcRows = await query<GcMemoryRow>(
+        "SELECT id, title, metadata, created_at FROM gc.issues WHERE issue_type = 'memory' AND status = 'open' ORDER BY created_at DESC LIMIT 50"
+      );
+    } catch { /* gc may not be accessible */ }
+
+    // Merge: add gc memories not already in curated
+    const curatedIds = new Set(rows.map((r) => r.id));
+    for (const gc of gcRows) {
+      if (curatedIds.has(gc.id)) continue;
+      const meta = typeof gc.metadata === "string" ? JSON.parse(gc.metadata) : gc.metadata || {};
+      rows.push({
+        id: gc.id,
+        content: gc.title,
+        category: meta["memory.kind"] || "context",
+        topics: "[]",
+        importance: parseFloat(meta["memory.confidence"] || "0.8"),
+        access_count: parseInt(meta["memory.access_count"] || "0"),
+        last_accessed_at: meta["memory.last_accessed"] || null,
+        decay_lambda: 0,
+        source_town: "deepwork",
+        created_at: gc.created_at,
+        archived: 0,
+      });
+    }
+
     const memories = rows.map((row) => {
       let topics: string[] = [];
       try {

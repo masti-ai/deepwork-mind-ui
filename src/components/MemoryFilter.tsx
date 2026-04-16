@@ -22,27 +22,44 @@ export default function MemoryFilterBar({ filters, onChange, availableTags }: Pr
       </div>
 
       {availableTags.length > 0 && (
-        <select
-          value={filters.tag}
-          onChange={(e) => onChange({ ...filters, tag: e.target.value })}
-          className="bg-white border border-warm-200 rounded-lg px-3 py-2 text-sm text-warm-600 focus:outline-none focus:border-accent/40 transition-colors appearance-none cursor-pointer pr-8"
-        >
-          <option value="">All tags</option>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => onChange({ ...filters, tag: "" })}
+            className={`text-xs px-2.5 py-1.5 rounded-full transition-colors ${
+              !filters.tag ? "bg-warm-800 text-white" : "bg-warm-100 text-warm-500 hover:bg-warm-200"
+            }`}
+          >
+            All
+          </button>
           {availableTags.map((t) => (
-            <option key={t} value={t}>{t}</option>
+            <button
+              key={t}
+              onClick={() => onChange({ ...filters, tag: filters.tag === t ? "" : t })}
+              className={`text-xs px-2.5 py-1.5 rounded-full transition-colors ${
+                filters.tag === t ? "bg-accent text-white" : "bg-warm-100 text-warm-500 hover:bg-warm-200"
+              }`}
+            >
+              {t}
+            </button>
           ))}
-        </select>
+        </div>
       )}
 
-      <select
-        value={filters.visibility}
-        onChange={(e) => onChange({ ...filters, visibility: e.target.value as MemoryVisibility | "" })}
-        className="bg-white border border-warm-200 rounded-lg px-3 py-2 text-sm text-warm-600 focus:outline-none focus:border-accent/40 transition-colors appearance-none cursor-pointer pr-8"
-      >
-        <option value="">All</option>
-        <option value="private">Private</option>
-        <option value="org">Organization</option>
-      </select>
+      <div className="flex gap-1.5">
+        {(["", "private", "org"] as const).map((vis) => (
+          <button
+            key={vis || "all"}
+            onClick={() => onChange({ ...filters, visibility: vis as MemoryVisibility | "" })}
+            className={`text-xs px-2.5 py-1.5 rounded-full transition-colors ${
+              filters.visibility === vis
+                ? vis === "org" ? "bg-accent text-white" : "bg-warm-800 text-white"
+                : "bg-warm-100 text-warm-500 hover:bg-warm-200"
+            }`}
+          >
+            {vis === "" ? "All" : vis === "private" ? "Private" : "Org"}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
